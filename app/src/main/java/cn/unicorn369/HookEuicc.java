@@ -60,10 +60,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     String activationCode = (String) param.args[0];
-                    //复制到剪切板
                     if (activationCode != null) {
-                        ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
-                        clipboardManager.setPrimaryClip(clipdata);
                         Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
                         shareCode(activationCode);
                     }
@@ -84,10 +81,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
                         return;
                     }
                     String activationCode = (String) param.getResult();
-                    //复制到剪切板
                     if (activationCode != null) {
-                        ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
-                        clipboardManager.setPrimaryClip(clipdata);
                         Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
                         shareCode(activationCode);
                     }
@@ -97,8 +91,12 @@ public class HookEuicc implements IXposedHookLoadPackage {
 
     }
 
-    //打开分享 (用于查看)
+
     public void shareCode(String activationCode) {
+        //复制到剪切板
+        ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
+        clipboardManager.setPrimaryClip(clipdata);
+        //打开分享 (用于查看)
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
         shareIntent.setType("text/plain");
         shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
