@@ -1,5 +1,6 @@
 package cn.unicorn369;
 
+//import android.app.Activity;
 import android.app.Application;
 import android.annotation.SuppressLint;
 
@@ -21,6 +22,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public class HookEuicc implements IXposedHookLoadPackage {
     private static final String TAG = "HookEUICC";
 
+    //private static Activity activity;
     private static Application application;
     private static Context context;
     private static ClipboardManager clipboardManager;
@@ -33,12 +35,25 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     application = (Application) param.thisObject;
-                    context = application.getApplicationContext();
+                    context = (Context) param.thisObject;
                     clipboardManager = (ClipboardManager) application.getSystemService(Context.CLIPBOARD_SERVICE);
                 }
             }
         );
-
+/*      //备用
+        XposedHelpers.findAndHookMethod(
+            Activity.class.getName(), lpparam.classLoader,
+            "onCreate", "android.os.Bundle",
+            new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    activity = (Activity) param.thisObject;
+                    context = (Context) param.thisObject;
+                    clipboardManager = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                }
+            }
+        );
+*/
         //伪装支持eSIM
         XposedHelpers.findAndHookMethod(
             EuiccManager.class,
@@ -59,13 +74,10 @@ public class HookEuicc implements IXposedHookLoadPackage {
             new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (application == null || clipboardManager == null) {
-                        return;
-                    }
                     String activationCode = (String) param.args[0];
                     if (activationCode != null) {
-                        Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
                         shareCode(activationCode);
+                        Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
                     }
                 }
             }
@@ -80,9 +92,6 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 @SuppressLint("DiscouragedPrivateApi")
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (application == null || clipboardManager == null) {
-                        return;
-                    }
                     String activationCode = (String) param.getResult();
                     if (activationCode != null) {
                         shareCode(activationCode);
@@ -91,14 +100,14 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 }
             }
         );
-
     }
-
 
     public void shareCode(String activationCode) {
         //复制到剪切板
-        ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
-        clipboardManager.setPrimaryClip(clipdata);
+        if (clipboardManager != null) {
+            ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
+            clipboardManager.setPrimaryClip(clipdata);
+        }
         //打开分享 (用于查看)
         Intent shareIntent = new Intent(Intent.ACTION_SEND);
         shareIntent.setType("text/plain");
