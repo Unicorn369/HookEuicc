@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">HookEuicc</string>
+    <string name="xposeddescription">Hook EUICC</string>
+</resources>
