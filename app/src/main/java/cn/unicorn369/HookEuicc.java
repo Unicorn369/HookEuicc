@@ -2,6 +2,8 @@ package cn.unicorn369;
 
 import android.app.Application;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 
 import android.telephony.euicc.DownloadableSubscription;
@@ -19,6 +21,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
 
     private static Application application;
     private static Context context;
+    private static ClipboardManager clipboardManager;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
@@ -29,6 +32,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     application = (Application) param.thisObject;
                     context = application.getApplicationContext();
+                    clipboardManager = (ClipboardManager) application.getSystemService(Context.CLIPBOARD_SERVICE);
                 }
             }
         );
@@ -52,7 +56,12 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     String activationCode = (String) param.args[0];
-                    Toast.makeText(context, "激活码: " + activationCode, Toast.LENGTH_LONG).show();
+                    //复制到剪切板
+                    if (activationCode != null) {
+                        ClipData clip = ClipData.newPlainText("eSIM激活码", activationCode);
+                        clipboardManager.setPrimaryClip(clip);
+                        Toast.makeText(context, "eSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+                    }
                 }
             }
         );
