@@ -59,6 +59,9 @@ public class HookEuicc implements IXposedHookLoadPackage {
             new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (application == null || clipboardManager == null) {
+                        return;
+                    }
                     String activationCode = (String) param.args[0];
                     if (activationCode != null) {
                         Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
@@ -82,8 +85,8 @@ public class HookEuicc implements IXposedHookLoadPackage {
                     }
                     String activationCode = (String) param.getResult();
                     if (activationCode != null) {
-                        Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
                         shareCode(activationCode);
+                        Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
                     }
                 }
             }
