@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">HookEuicc</string>
-    <string name="xposeddescription">Hook EUICC</string>
+    <string name="xposeddescription">伪装支持eSIM，获取eSIM激活码</string>
 </resources>

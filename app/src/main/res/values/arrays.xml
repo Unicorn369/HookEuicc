@@ -2,5 +2,9 @@
 <resources>
     <string-array name="scope">
         <item>app.septs.euiccprobe</item>
+        <item>com.dentwireless.dentapp</item>
+        <item>com.flexiroamx</item>
+        <item>com.giffgaffmobile.controller</item>
+        <item>com.redteamobile.redteago</item>
     </string-array>
 </resources>
