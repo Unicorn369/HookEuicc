@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 
 import android.telephony.euicc.DownloadableSubscription;
 import android.telephony.euicc.EuiccManager;
@@ -37,6 +38,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
             }
         );
 
+        //伪装支持eSIM
         XposedHelpers.findAndHookMethod(
             EuiccManager.class,
             "isEnabled",
@@ -48,6 +50,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
             }
         );
 
+        //获取eSIM激活码
         XposedHelpers.findAndHookMethod(
             DownloadableSubscription.class,
             "forActivationCode",
@@ -58,13 +61,24 @@ public class HookEuicc implements IXposedHookLoadPackage {
                     String activationCode = (String) param.args[0];
                     //复制到剪切板
                     if (activationCode != null) {
-                        ClipData clip = ClipData.newPlainText("eSIM激活码", activationCode);
-                        clipboardManager.setPrimaryClip(clip);
-                        Toast.makeText(context, "eSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+                        ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
+                        clipboardManager.setPrimaryClip(clipdata);
+                        Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+                        shareCode(activationCode);
                     }
                 }
             }
         );
 
-     }
+    }
+
+    //打开分享 (用于查看)
+    public void shareCode(String activationCode) {
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
+        Intent chooserIntent = Intent.createChooser(shareIntent, "eSIM激活码");
+        chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        context.startActivity(chooserIntent);
+    }
 }
