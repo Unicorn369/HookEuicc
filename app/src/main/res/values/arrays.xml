@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string-array name="scope">
+        <item>com.miui.euicc</item>
         <item>app.septs.euiccprobe</item>
         <item>com.dentwireless.dentapp</item>
         <item>com.flexiroamx</item>

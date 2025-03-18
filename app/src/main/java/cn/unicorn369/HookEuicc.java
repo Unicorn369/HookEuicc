@@ -1,6 +1,7 @@
 package cn.unicorn369;
 
 import android.app.Application;
+import android.annotation.SuppressLint;
 
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -59,6 +60,30 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     String activationCode = (String) param.args[0];
+                    //复制到剪切板
+                    if (activationCode != null) {
+                        ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
+                        clipboardManager.setPrimaryClip(clipdata);
+                        Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+                        shareCode(activationCode);
+                    }
+                }
+            }
+        );
+
+        Class<?> downloadableSubscriptionClass = XposedHelpers.findClass(DownloadableSubscription.class.getName(), lpparam.classLoader);
+        //Hook LPA
+        XposedHelpers.findAndHookMethod(
+            downloadableSubscriptionClass,
+            "getEncodedActivationCode",
+            new XC_MethodHook() {
+                @SuppressLint("DiscouragedPrivateApi")
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (application == null || clipboardManager == null) {
+                        return;
+                    }
+                    String activationCode = (String) param.getResult();
                     //复制到剪切板
                     if (activationCode != null) {
                         ClipData clipdata = ClipData.newPlainText("eSIM激活码", activationCode);
