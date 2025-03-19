@@ -3,7 +3,14 @@
 
 在某些不直接提供eSIM激活码的应用，将复制激活码到剪切板
 
-### 食用方法
+## 先决条件
+root设备已安装 [LSPosed](https://github.com/LSPosed/LSPosed/releases)
+
+无root设备安装 [LSPatch](https://github.com/JingMatrix/LSPatch/releases)
+
+
+## 食用方法
+
 通常只需勾选你需要伪装的应用即可享受薅羊毛的乐趣
 
 对于某些应用，如`com.dentwireless.dentapp`、`com.giffgaffmobile.controller`在点击安装时将会复制eSIM激活码到剪切板
