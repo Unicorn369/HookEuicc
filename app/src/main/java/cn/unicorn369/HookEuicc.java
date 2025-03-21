@@ -8,12 +8,14 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 
 import android.telephony.euicc.DownloadableSubscription;
 import android.telephony.euicc.EuiccManager;
 
 import android.widget.Toast;
 
+//import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
@@ -54,10 +56,22 @@ public class HookEuicc implements IXposedHookLoadPackage {
             }
         );
 */
+
+        XposedHelpers.findAndHookMethod(
+            PackageManager.class, "hasSystemFeature", String.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    String feature = (String) param.args[0];
+                    if (feature.equals("android.hardware.telephony.euicc")) {
+                        param.setResult(true);
+                    }
+                }
+            }
+        );
+
         //伪装支持eSIM
         XposedHelpers.findAndHookMethod(
-            EuiccManager.class,
-            "isEnabled",
+            EuiccManager.class, "isEnabled",
             new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -68,9 +82,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
 
         //获取eSIM激活码
         XposedHelpers.findAndHookMethod(
-            DownloadableSubscription.class,
-            "forActivationCode",
-            String.class,
+            DownloadableSubscription.class, "forActivationCode", String.class,
             new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
@@ -83,11 +95,10 @@ public class HookEuicc implements IXposedHookLoadPackage {
             }
         );
 
-        Class<?> downloadableSubscriptionClass = XposedHelpers.findClass(DownloadableSubscription.class.getName(), lpparam.classLoader);
         //Hook LPA
+        Class<?> downloadableSubscriptionClass = XposedHelpers.findClass(DownloadableSubscription.class.getName(), lpparam.classLoader);
         XposedHelpers.findAndHookMethod(
-            downloadableSubscriptionClass,
-            "getEncodedActivationCode",
+            downloadableSubscriptionClass, "getEncodedActivationCode",
             new XC_MethodHook() {
                 @SuppressLint("DiscouragedPrivateApi")
                 @Override
