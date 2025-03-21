@@ -55,14 +55,39 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 }
             }
         );
-*/
 
+        //这是一个错误的Hook
         XposedHelpers.findAndHookMethod(
             PackageManager.class, "hasSystemFeature", String.class, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     String feature = (String) param.args[0];
-                    if (feature.equals("android.hardware.telephony.euicc")) {
+                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
+                        param.setResult(true);
+                    }
+                }
+            }
+        );
+*/
+        //android.hardware.telephony.euicc
+        Class<?> packageManagerClass = XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader);
+        XposedHelpers.findAndHookMethod(
+            packageManagerClass, "hasSystemFeature", String.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    String feature = (String) param.args[0];
+                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
+                        param.setResult(true);
+                    }
+                }
+            }
+        );
+        XposedHelpers.findAndHookMethod(
+            packageManagerClass, "hasSystemFeature", String.class, int.class, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    String feature = (String) param.args[0];
+                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
                         param.setResult(true);
                     }
                 }

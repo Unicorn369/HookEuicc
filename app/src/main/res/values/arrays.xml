@@ -2,6 +2,7 @@
 <resources>
     <string-array name="scope">
         <item>com.miui.euicc</item>
+        <item>app.septs.euiccprobe</item>
         <item>com.dentwireless.dentapp</item>
         <item>com.flexiroamx</item>
         <item>com.giffgaffmobile.controller</item>
