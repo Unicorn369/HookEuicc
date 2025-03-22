@@ -1,5 +1,6 @@
 package cn.unicorn369;
 
+import android.app.Activity;
 import android.app.AndroidAppHelper;
 
 import android.content.ClipData;
@@ -24,9 +25,22 @@ public class HookEuicc implements IXposedHookLoadPackage {
     private static final String Title = "eSIM激活码";
 
     private static String initActivationCode = "";
+    private static Activity activity;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+
+        XposedHelpers.findAndHookMethod(
+            Activity.class.getName(), lpparam.classLoader,
+            "onCreate", "android.os.Bundle",
+            new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    activity = (Activity) param.thisObject;
+                }
+            }
+        );
+
         //android.hardware.telephony.euicc
         Class<?> packageManagerClass = XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader);
         XposedHelpers.findAndHookMethod(
@@ -100,16 +114,10 @@ public class HookEuicc implements IXposedHookLoadPackage {
             ClipData clipdata = ClipData.newPlainText(Title, activationCode);
             clipboardManager.setPrimaryClip(clipdata);
         }
-        //打开分享 (用于查看)
-        Intent shareIntent = new Intent(Intent.ACTION_SEND);
-        shareIntent.setType("text/plain");
-        shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
-        Intent chooserIntent = Intent.createChooser(shareIntent, Title);
-        chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        context.startActivity(chooserIntent);
-        //发送通知
+        //发送激活码
         if (initActivationCode != activationCode) {
             initActivationCode = activationCode;
+            new Share.Builder(activity).setText(activationCode).setTitle(Title).build().toShare();
             Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
         }
     }
