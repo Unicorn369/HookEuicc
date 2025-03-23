@@ -7,12 +7,19 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+
 import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
+import android.content.pm.ResolveInfo;
 
 import android.telephony.euicc.DownloadableSubscription;
 import android.telephony.euicc.EuiccManager;
+import android.telephony.TelephonyManager;
 
 import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
 
 //import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -104,6 +111,38 @@ public class HookEuicc implements IXposedHookLoadPackage {
                 }
             }
         );
+
+        //针对RedteaGO的Hook
+        XposedHelpers.findAndHookMethod(
+            "android.app.ApplicationPackageManager", lpparam.classLoader,
+            "queryIntentServices", Intent.class, int.class,
+            new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (!lpparam.packageName.equals("com.redteamobile.redteago")) return;
+                    Intent intent = (Intent) param.args[0];
+                    if (intent != null && intent.getAction().equals("android.service.euicc.EuiccService")) {
+                        List<ResolveInfo> originalList = (List<ResolveInfo>) param.getResult();
+                        if (originalList == null || originalList.isEmpty()) {
+                            //注入伪造的ResolveInfo
+                            List<ResolveInfo> fakeList = new ArrayList<>();
+                            fakeList.add(createFakeResolveInfo());
+                            param.setResult(fakeList);
+                        }
+                    }
+                }
+            }
+        );
+        XposedHelpers.findAndHookMethod(
+            TelephonyManager.class, "getCardIdForDefaultEuicc",
+            new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    if (!lpparam.packageName.equals("com.redteamobile.redteago")) return;
+                    param.setResult(0);
+                }
+            }
+        );
     }
 
     private void shareCode(String activationCode) {
@@ -120,5 +159,15 @@ public class HookEuicc implements IXposedHookLoadPackage {
             new Share.Builder(activity).setText(activationCode).setTitle(Title).build().toShare();
             Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
         }
+    }
+
+    //构造伪造的ResolveInfo
+    private ResolveInfo createFakeResolveInfo() {
+        ResolveInfo fakeInfo = new ResolveInfo();
+        fakeInfo.serviceInfo = new ServiceInfo();
+        fakeInfo.serviceInfo.packageName = "cn.unicorn369.HookEuicc";
+        fakeInfo.serviceInfo.name = "HookEuiccService";
+        fakeInfo.serviceInfo.permission = "android.permission.BIND_EUICC_SERVICE";
+        return fakeInfo;
     }
 }
