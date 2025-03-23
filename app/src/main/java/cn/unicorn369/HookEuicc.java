@@ -36,10 +36,12 @@ public class HookEuicc implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        //Class
+        Class<?> packageManagerClass = XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader);
 
+        //Activity
         XposedHelpers.findAndHookMethod(
-            Activity.class.getName(), lpparam.classLoader,
-            "onCreate", "android.os.Bundle",
+            Activity.class, "onCreate", "android.os.Bundle",
             new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
@@ -48,32 +50,31 @@ public class HookEuicc implements IXposedHookLoadPackage {
             }
         );
 
-        //android.hardware.telephony.euicc
-        Class<?> packageManagerClass = XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader);
-        XposedHelpers.findAndHookMethod(
-            packageManagerClass, "hasSystemFeature", String.class, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    String feature = (String) param.args[0];
-                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
-                        param.setResult(true);
-                    }
-                }
-            }
-        );
-        XposedHelpers.findAndHookMethod(
-            packageManagerClass, "hasSystemFeature", String.class, int.class, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    String feature = (String) param.args[0];
-                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
-                        param.setResult(true);
-                    }
-                }
-            }
-        );
-
         //伪装支持eSIM
+        XposedHelpers.findAndHookMethod(
+            packageManagerClass, "hasSystemFeature", String.class,
+            new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    String feature = (String) param.args[0];
+                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
+                        param.setResult(true);
+                    }
+                }
+            }
+        );
+        XposedHelpers.findAndHookMethod(
+            packageManagerClass, "hasSystemFeature", String.class, int.class,
+            new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    String feature = (String) param.args[0];
+                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
+                        param.setResult(true);
+                    }
+                }
+            }
+        );
         XposedHelpers.findAndHookMethod(
             EuiccManager.class, "isEnabled",
             new XC_MethodHook() {
@@ -114,8 +115,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
 
         //针对RedteaGO的Hook
         XposedHelpers.findAndHookMethod(
-            "android.app.ApplicationPackageManager", lpparam.classLoader,
-            "queryIntentServices", Intent.class, int.class,
+            packageManagerClass, "queryIntentServices", Intent.class, int.class,
             new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -146,7 +146,7 @@ public class HookEuicc implements IXposedHookLoadPackage {
     }
 
     private void shareCode(String activationCode) {
-        Context context = AndroidAppHelper.currentApplication();
+        Context context = AndroidAppHelper.currentApplication().getApplicationContext();
         ClipboardManager clipboardManager = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
         //复制到剪切板
         if (clipboardManager != null) {
@@ -156,8 +156,24 @@ public class HookEuicc implements IXposedHookLoadPackage {
         //发送激活码
         if (initActivationCode != activationCode) {
             initActivationCode = activationCode;
-            new Share.Builder(activity).setText(activationCode).setTitle(Title).build().toShare();
-            Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+            //
+            Intent shareIntent = new Intent();
+            shareIntent.setAction(Intent.ACTION_SEND);
+            shareIntent.setType("text/plain");
+            shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
+            shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            shareIntent = Intent.createChooser(shareIntent, Title);
+            //部分应用可能会出现错误(捂脸)
+            try {
+                context.startActivity(shareIntent);
+            } catch (Exception e) {
+                activity.startActivity(shareIntent);
+            }
+            try {
+                Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Toast.makeText(activity, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+            }
         }
     }
 
