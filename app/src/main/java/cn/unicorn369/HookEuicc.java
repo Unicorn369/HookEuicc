@@ -113,13 +113,12 @@ public class HookEuicc implements IXposedHookLoadPackage {
             }
         );
 
-        //针对RedteaGO的Hook
+        //其他检测
         XposedHelpers.findAndHookMethod(
             packageManagerClass, "queryIntentServices", Intent.class, int.class,
             new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (!lpparam.packageName.equals("com.redteamobile.redteago")) return;
                     Intent intent = (Intent) param.args[0];
                     if (intent != null && intent.getAction().equals("android.service.euicc.EuiccService")) {
                         List<ResolveInfo> originalList = (List<ResolveInfo>) param.getResult();
@@ -138,7 +137,6 @@ public class HookEuicc implements IXposedHookLoadPackage {
             new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (!lpparam.packageName.equals("com.redteamobile.redteago")) return;
                     param.setResult(0);
                 }
             }
