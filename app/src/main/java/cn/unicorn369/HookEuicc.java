@@ -1,187 +1,273 @@
 package cn.unicorn369;
 
 import android.app.Activity;
-import android.app.AndroidAppHelper;
-
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-
 import android.content.pm.PackageManager;
-import android.content.pm.ServiceInfo;
 import android.content.pm.ResolveInfo;
-
+import android.content.pm.ServiceInfo;
+import android.os.Bundle;
+import android.util.Log;
+import android.telephony.TelephonyManager;
 import android.telephony.euicc.DownloadableSubscription;
 import android.telephony.euicc.EuiccManager;
-import android.telephony.TelephonyManager;
-
 import android.widget.Toast;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-//import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.IXposedHookLoadPackage;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedHelpers;
-import de.robv.android.xposed.callbacks.XC_LoadPackage;
+import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.api.XposedModule;
+import io.github.libxposed.api.XposedModuleInterface;
 
-public class HookEuicc implements IXposedHookLoadPackage {
+public class HookEuicc extends XposedModule {
+
     private static final String TAG = "HookEUICC";
-    private static final String Title = "eSIM激活码";
+    private static final String TITLE = "eSIM激活码";
 
     private static String initActivationCode = "";
     private static Activity activity;
 
     @Override
-    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
-        //Class
-        Class<?> packageManagerClass = XposedHelpers.findClass("android.app.ApplicationPackageManager", lpparam.classLoader);
+    public void onPackageReady(XposedModuleInterface.PackageReadyParam param) {
+        final String packageName = param.getPackageName();
+        final ClassLoader classLoader = param.getDefaultClassLoader();
 
-        //Activity
-        XposedHelpers.findAndHookMethod(
-            Activity.class, "onCreate", "android.os.Bundle",
-            new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    activity = (Activity) param.thisObject;
-                }
+        try {
+            HookInit(classLoader);
+            // OMAPI bypass
+            if (packageName.equals("com.android.se")) {
+                HookAndroidSE(classLoader);
             }
-        );
+        } catch (Throwable t) {
+            log(Log.ERROR, TAG, "发生错误: " + packageName, t);
+        }
+    }
 
-        //伪装支持eSIM
-        XposedHelpers.findAndHookMethod(
-            packageManagerClass, "hasSystemFeature", String.class,
-            new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    String feature = (String) param.args[0];
-                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
-                        param.setResult(true);
+    private void HookInit(ClassLoader classLoader) throws Throwable {
+        // Activity.onCreate(Bundle)
+        Method activityOnCreate = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
+        hook(activityOnCreate)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    activity = (Activity) chain.getThisObject();
+                    return chain.proceed();
+                });
+
+        Class<?> packageManagerClass = Class.forName(
+                "android.app.ApplicationPackageManager", false, classLoader);
+
+        // 伪装支持 eSIM
+        Method hasSystemFeature1 =
+                packageManagerClass.getDeclaredMethod("hasSystemFeature", String.class);
+        hook(hasSystemFeature1)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    String feature = (String) chain.getArg(0);
+                    if (PackageManager.FEATURE_TELEPHONY_EUICC.equals(feature)) {
+                        return true;
                     }
-                }
-            }
-        );
-        XposedHelpers.findAndHookMethod(
-            packageManagerClass, "hasSystemFeature", String.class, int.class,
-            new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    String feature = (String) param.args[0];
-                    if (feature.equals(PackageManager.FEATURE_TELEPHONY_EUICC)) {
-                        param.setResult(true);
-                    }
-                }
-            }
-        );
-        XposedHelpers.findAndHookMethod(
-            EuiccManager.class, "isEnabled",
-            XC_MethodReplacement.returnConstant(true)
-        );
+                    return chain.proceed();
+                });
 
-        //获取eSIM激活码
-        XposedHelpers.findAndHookMethod(
-            DownloadableSubscription.class, "forActivationCode", String.class,
-            new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    String activationCode = (String) param.args[0];
+        Method hasSystemFeature2 =
+                packageManagerClass.getDeclaredMethod("hasSystemFeature", String.class, int.class);
+        hook(hasSystemFeature2)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    String feature = (String) chain.getArg(0);
+                    if (PackageManager.FEATURE_TELEPHONY_EUICC.equals(feature)) {
+                        return true;
+                    }
+                    return chain.proceed();
+                });
+
+        // EuiccManager.isEnabled() -> true
+        Method isEnabled = EuiccManager.class.getDeclaredMethod("isEnabled");
+        hook(isEnabled)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> true);
+
+        // 获取 eSIM 激活码
+        Method forActivationCode =
+                DownloadableSubscription.class.getDeclaredMethod("forActivationCode", String.class);
+        hook(forActivationCode)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    String activationCode = (String) chain.getArg(0);
                     if (activationCode != null) {
                         shareCode(activationCode);
                     }
-                }
-            }
-        );
+                    return chain.proceed();
+                });
 
-        //Hook LPA
-        XposedHelpers.findAndHookMethod(
-            DownloadableSubscription.class, "getEncodedActivationCode",
-            new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    String activationCode = (String) param.getResult();
-                    if (activationCode != null) {
-                        shareCode(activationCode);
-                    }
-                }
-            }
-        );
-
-        //其他检测
-        XposedHelpers.findAndHookMethod(
-            packageManagerClass, "queryIntentServices", Intent.class, int.class,
-            new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    Intent intent = (Intent) param.args[0];
-                    if (intent != null && intent.getAction().equals("android.service.euicc.EuiccService")) {
-                        List<ResolveInfo> originalList = (List<ResolveInfo>) param.getResult();
-                        if (originalList == null || originalList.isEmpty()) {
-                            //注入伪造的ResolveInfo
-                            List<ResolveInfo> fakeList = new ArrayList<>();
-                            fakeList.add(createFakeResolveInfo());
-                            param.setResult(fakeList);
+        // Hook LPA
+        Method getEncodedActivationCode =
+                DownloadableSubscription.class.getDeclaredMethod("getEncodedActivationCode");
+        hook(getEncodedActivationCode)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    Object result = chain.proceed();
+                    if (result instanceof String) {
+                        String activationCode = (String) result;
+                        if (activationCode != null) {
+                            shareCode(activationCode);
                         }
                     }
-                }
-            }
-        );
-        XposedHelpers.findAndHookMethod(
-            TelephonyManager.class, "getCardIdForDefaultEuicc",
-            XC_MethodReplacement.returnConstant(0)
-        );
+                    return result;
+                });
 
-        // OMAPI Bypass
-        if (lpparam.packageName.equals("com.android.se")) {
-            XposedHelpers.findAndHookMethod("com.android.se.security.AccessControlEnforcer",
-            lpparam.classLoader, "readSecurityProfile",
-            new XC_MethodReplacement() {
-                @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    XposedHelpers.setBooleanField(param.thisObject, "mUseArf", false);
-                    XposedHelpers.setBooleanField(param.thisObject, "mUseAra", false);
-                    XposedHelpers.setBooleanField(param.thisObject, "mFullAccess", true);
+        // 其他检测
+        Method queryIntentServices =
+                packageManagerClass.getDeclaredMethod(
+                        "queryIntentServices", Intent.class, int.class);
+        hook(queryIntentServices)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    Intent intent = (Intent) chain.getArg(0);
+
+                    if (intent != null
+                            && "android.service.euicc.EuiccService".equals(intent.getAction())) {
+
+                        Object result = chain.proceed();
+
+                        if (result instanceof List && !((List<?>) result).isEmpty()) {
+                            return result;
+                        }
+
+                        List<ResolveInfo> fakeList = new ArrayList<>();
+                        fakeList.add(createFakeResolveInfo());
+                        return fakeList;
+                    }
+
+                    return chain.proceed();
+                });
+
+        // TelephonyManager.getCardIdForDefaultEuicc() -> 0
+        Method getCardIdForDefaultEuicc =
+                TelephonyManager.class.getDeclaredMethod("getCardIdForDefaultEuicc");
+        hook(getCardIdForDefaultEuicc)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> 0);
+    }
+
+    // OMAPI bypass
+    private void HookAndroidSE(ClassLoader classLoader) throws Throwable {
+        Class<?> enforcerClass = Class.forName(
+                "com.android.se.security.AccessControlEnforcer", false, classLoader);
+
+        Method readSecurityProfile =
+                enforcerClass.getDeclaredMethod("readSecurityProfile");
+
+        hook(readSecurityProfile)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(chain -> {
+                    Object thisObject = chain.getThisObject();
+
+                    setBooleanField(thisObject, "mUseArf", false);
+                    setBooleanField(thisObject, "mUseAra", false);
+                    setBooleanField(thisObject, "mFullAccess", true);
+
                     return null;
-                }
-            });
+                });
+    }
+
+    private static void setBooleanField(Object object, String fieldName, boolean value)
+            throws IllegalAccessException, NoSuchFieldException {
+        Class<?> clazz = object.getClass();
+
+        while (clazz != null) {
+            try {
+                Field field = clazz.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.setBoolean(object, value);
+                return;
+            } catch (NoSuchFieldException ignored) {
+                clazz = clazz.getSuperclass();
+            }
         }
+
+        throw new NoSuchFieldException(fieldName);
     }
 
     private void shareCode(String activationCode) {
-        Context context = AndroidAppHelper.currentApplication().getApplicationContext();
-        ClipboardManager clipboardManager = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-        //复制到剪切板
+        Context context = getCurrentApplicationContext();
+
+        ClipboardManager clipboardManager =
+                (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+
+        // 复制到剪切板
         if (clipboardManager != null) {
-            ClipData clipdata = ClipData.newPlainText(Title, activationCode);
-            clipboardManager.setPrimaryClip(clipdata);
+            ClipData clipData = ClipData.newPlainText(TITLE, activationCode);
+            clipboardManager.setPrimaryClip(clipData);
         }
-        //发送激活码
-        if (initActivationCode != activationCode) {
+
+        // 避免重复发送相同激活码
+        if (!activationCode.equals(initActivationCode)) {
             initActivationCode = activationCode;
-            //
-            Intent shareIntent = new Intent();
-            shareIntent.setAction(Intent.ACTION_SEND);
+
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("text/plain");
             shareIntent.putExtra(Intent.EXTRA_TEXT, activationCode);
             shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            shareIntent = Intent.createChooser(shareIntent, Title);
-            //部分应用可能会出现错误(捂脸)
+            shareIntent = Intent.createChooser(shareIntent, TITLE);
+
             try {
                 context.startActivity(shareIntent);
             } catch (Exception e) {
-                activity.startActivity(shareIntent);
+                if (activity != null) {
+                    activity.startActivity(shareIntent);
+                } else {
+                    log(Log.WARN, TAG, "无法启动分享", e);
+                }
             }
+
             try {
-                Toast.makeText(context, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+                Toast.makeText(
+                        context,
+                        "已复制到剪切板\neSIM激活码：" + activationCode,
+                        Toast.LENGTH_LONG
+                ).show();
             } catch (Exception e) {
-                Toast.makeText(activity, "已复制到剪切板\neSIM激活码：" + activationCode, Toast.LENGTH_LONG).show();
+                if (activity != null) {
+                    Toast.makeText(
+                            activity,
+                            "已复制到剪切板\neSIM激活码：" + activationCode,
+                            Toast.LENGTH_LONG
+                    ).show();
+                }
             }
         }
     }
 
-    //构造伪造的ResolveInfo
+    // 获取当前进程 Application
+    private Context getCurrentApplicationContext() {
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            Method currentApplication =
+                    activityThread.getDeclaredMethod("currentApplication");
+            currentApplication.setAccessible(true);
+
+            Object application = currentApplication.invoke(null);
+            if (application instanceof Context) {
+                return ((Context) application).getApplicationContext();
+            }
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "无法获取Application", t);
+        }
+
+        if (activity != null) {
+            return activity.getApplicationContext();
+        }
+
+        throw new IllegalStateException("当前Application不可用");
+    }
+
+    // 构造伪造的 ResolveInfo。
     private ResolveInfo createFakeResolveInfo() {
         ResolveInfo fakeInfo = new ResolveInfo();
         fakeInfo.serviceInfo = new ServiceInfo();
